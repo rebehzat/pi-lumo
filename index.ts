@@ -48,11 +48,33 @@ export const LUMO_MODELS = [
   },
 ] as const;
 
+export function getAuthConfig(env: NodeJS.ProcessEnv = process.env): {
+  apiKey: string;
+  headers?: Record<string, string>;
+} {
+  if (!env.LUMO_API_KEY && env.LUMO_TOKEN) {
+    return {
+      apiKey: "$LUMO_TOKEN",
+      ...(env.LUMO_UID
+        ? {
+            headers: {
+              "x-pm-uid": "$LUMO_UID",
+            },
+          }
+        : {}),
+    };
+  }
+
+  return { apiKey: "$LUMO_API_KEY" };
+}
+
 export default function lumoProvider(pi: ExtensionAPI): void {
+  const auth = getAuthConfig();
+
   pi.registerProvider(PROVIDER_ID, {
     name: "Proton Lumo",
     baseUrl: BASE_URL,
-    apiKey: "$LUMO_API_KEY",
+    ...auth,
     authHeader: true,
     api: "openai-completions",
     models: LUMO_MODELS.map((model) => ({

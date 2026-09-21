@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import lumoProvider, { BASE_URL, LUMO_MODELS, PROVIDER_ID } from "../index.js";
+import lumoProvider, { BASE_URL, getAuthConfig, LUMO_MODELS, PROVIDER_ID } from "../index.js";
 
 test("exports all three current Lumo choices", () => {
   assert.deepEqual(
@@ -49,4 +49,15 @@ test("maps Pi thinking levels to Lumo reasoning efforts", () => {
   });
   assert.deepEqual(max?.thinkingLevelMap, lite?.thinkingLevelMap);
   assert.equal(apertus?.reasoning, false);
+});
+
+test("supports the session-token environment used by lumode", () => {
+  assert.deepEqual(getAuthConfig({ LUMO_TOKEN: "secret", LUMO_UID: "uid" }), {
+    apiKey: "$LUMO_TOKEN",
+    headers: { "x-pm-uid": "$LUMO_UID" },
+  });
+  assert.deepEqual(
+    getAuthConfig({ LUMO_API_KEY: "official", LUMO_TOKEN: "legacy", LUMO_UID: "uid" }),
+    { apiKey: "$LUMO_API_KEY" },
+  );
 });
