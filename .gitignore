@@ -2,4 +2,6 @@ node_modules/
 dist/
 *.log
 .env
-
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
