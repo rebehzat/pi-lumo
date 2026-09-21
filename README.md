@@ -12,6 +12,8 @@ Lite and Max support Pi's thinking control. Pi's `off`, `minimal`, `low`, `mediu
 
 ## Install
 
+Automatic Firefox authentication requires the `sqlite3` command-line tool. It is already installed on many Linux distributions; otherwise install your distribution's `sqlite` package.
+
 ```bash
 pi install git:github.com/rebehzat/pi-lumo
 ```
