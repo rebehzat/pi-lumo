@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import lumoProvider, { BASE_URL, LUMO_MODELS, PROVIDER_ID } from "../index.ts";
+import lumoProvider, { BASE_URL, LUMO_MODELS, PROVIDER_ID } from "../index.js";
 
 test("exports all three current Lumo choices", () => {
   assert.deepEqual(
