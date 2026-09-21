@@ -24,7 +24,14 @@ test("registers an OpenAI-compatible provider using LUMO_API_KEY", () => {
     },
   };
 
-  lumoProvider(pi as never);
+  const previousApiKey = process.env.LUMO_API_KEY;
+  process.env.LUMO_API_KEY = "test";
+  try {
+    lumoProvider(pi as never);
+  } finally {
+    if (previousApiKey === undefined) delete process.env.LUMO_API_KEY;
+    else process.env.LUMO_API_KEY = previousApiKey;
+  }
 
   assert.equal(registeredName, PROVIDER_ID);
   assert.equal(registeredConfig?.baseUrl, BASE_URL);
@@ -60,4 +67,16 @@ test("supports the session-token environment used by lumode", () => {
     getAuthConfig({ LUMO_API_KEY: "official", LUMO_TOKEN: "legacy", LUMO_UID: "uid" }),
     { apiKey: "$LUMO_API_KEY" },
   );
+});
+
+test("uses discovered Firefox credentials only when environment credentials are absent", () => {
+  const discover = () => ({ uid: "firefox-uid", token: "firefox-token", profile: "/profile/cookies.sqlite" });
+
+  assert.deepEqual(getAuthConfig({}, discover), {
+    apiKey: "firefox-token",
+    headers: { "x-pm-uid": "firefox-uid" },
+  });
+  assert.deepEqual(getAuthConfig({ LUMO_API_KEY: "official" }, discover), {
+    apiKey: "$LUMO_API_KEY",
+  });
 });

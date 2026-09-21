@@ -8,6 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "test/**/*.ts"]
+  "include": ["index.ts", "firefox-auth.ts", "test/**/*.ts"]
 }
-

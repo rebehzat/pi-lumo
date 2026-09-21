@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { discoverFirefoxCredentials } from "./firefox-auth.js";
 
 export const PROVIDER_ID = "lumo";
 export const BASE_URL = "https://lumo.proton.me/api/ai/v1";
@@ -48,7 +49,10 @@ export const LUMO_MODELS = [
   },
 ] as const;
 
-export function getAuthConfig(env: NodeJS.ProcessEnv = process.env): {
+export function getAuthConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  discover: typeof discoverFirefoxCredentials = discoverFirefoxCredentials,
+): {
   apiKey: string;
   headers?: Record<string, string>;
 } {
@@ -63,6 +67,18 @@ export function getAuthConfig(env: NodeJS.ProcessEnv = process.env): {
           }
         : {}),
     };
+  }
+
+  if (!env.LUMO_API_KEY) {
+    const credentials = discover();
+    if (credentials) {
+      return {
+        apiKey: credentials.token,
+        headers: {
+          "x-pm-uid": credentials.uid,
+        },
+      };
+    }
   }
 
   return { apiKey: "$LUMO_API_KEY" };
