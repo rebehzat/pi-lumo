@@ -1,0 +1,37 @@
+{
+  "name": "pi-lumo",
+  "version": "0.1.0",
+  "description": "Lumo model provider extension for the Pi coding agent",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "lumo",
+    "proton"
+  ],
+  "license": "MIT",
+  "author": "rebehzat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rebehzat/pi-lumo.git"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.86.1",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
+
