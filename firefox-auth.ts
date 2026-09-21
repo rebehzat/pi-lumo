@@ -1,7 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 
 export interface FirefoxCredentials {
   uid: string;
@@ -64,29 +64,28 @@ const COOKIE_QUERY = `SELECT name, value
                        ORDER BY expiry DESC`;
 
 function readCookieRows(databasePath: string): CookieRow[] {
-  let database: DatabaseSync | undefined;
-  try {
-    database = new DatabaseSync(databasePath, { readOnly: true });
-    return database.prepare(COOKIE_QUERY).all() as unknown as CookieRow[];
-  } catch {
-    database?.close();
-    database = undefined;
+  const query = (path: string): CookieRow[] => {
+    const output = execFileSync("sqlite3", ["-json", path, COOKIE_QUERY], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5_000,
+    });
+    return output.trim() ? (JSON.parse(output) as CookieRow[]) : [];
+  };
 
+  try {
+    return query(`file:${databasePath}?immutable=1`);
+  } catch {
     const snapshotDirectory = mkdtempSync(join(tmpdir(), "pi-lumo-firefox-"));
     chmodSync(snapshotDirectory, 0o700);
     const snapshotPath = join(snapshotDirectory, "cookies.sqlite");
     try {
       copyFileSync(databasePath, snapshotPath);
       chmodSync(snapshotPath, 0o600);
-      database = new DatabaseSync(snapshotPath, { readOnly: true });
-      return database.prepare(COOKIE_QUERY).all() as unknown as CookieRow[];
+      return query(snapshotPath);
     } finally {
-      database?.close();
-      database = undefined;
       rmSync(snapshotDirectory, { recursive: true, force: true });
     }
-  } finally {
-    database?.close();
   }
 }
 

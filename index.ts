@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { discoverFirefoxCredentials } from "./firefox-auth.js";
+import { discoverFirefoxCredentials } from "./firefox-auth.ts";
 
 export const PROVIDER_ID = "lumo";
 export const BASE_URL = "https://lumo.proton.me/api/ai/v1";
@@ -25,7 +25,7 @@ export const LUMO_MODELS = [
     cost: FREE,
     contextWindow: 128_000,
     maxTokens: 16_384,
-    compat: { supportsReasoningEffort: true },
+    compat: { supportsReasoningEffort: true, supportsDeveloperRole: false },
   },
   {
     id: "lumo-max",
@@ -36,7 +36,7 @@ export const LUMO_MODELS = [
     cost: FREE,
     contextWindow: 128_000,
     maxTokens: 16_384,
-    compat: { supportsReasoningEffort: true },
+    compat: { supportsReasoningEffort: true, supportsDeveloperRole: false },
   },
   {
     id: "apertus-15",
@@ -46,6 +46,7 @@ export const LUMO_MODELS = [
     cost: FREE,
     contextWindow: 128_000,
     maxTokens: 16_384,
+    compat: { supportsDeveloperRole: false },
   },
 ] as const;
 
@@ -85,6 +86,7 @@ export function getAuthConfig(
 }
 
 export default function lumoProvider(pi: ExtensionAPI): void {
+  if (process.env.PI_LUMO_DEBUG) console.error("pi-lumo: extension loaded");
   const auth = getAuthConfig();
 
   pi.registerProvider(PROVIDER_ID, {
