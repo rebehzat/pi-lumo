@@ -30,24 +30,14 @@ If you are already signed in to Lumo in Firefox, no setup is normally required. 
 
 Authentication precedence is:
 
-1. `LUMO_API_KEY`
-2. `LUMO_TOKEN` with `LUMO_UID`
-3. A current Lumo session from Firefox or Firefox Developer Edition
+1. `LUMO_TOKEN` with `LUMO_UID`, when explicitly set
+2. A current Lumo session from Firefox or Firefox Developer Edition
 
 Firefox credentials are read at runtime and kept in memory. They are never copied into the repository, Pi settings, or an extension-owned credential file. When Firefox locks its cookie database, the extension reads a permission-restricted temporary snapshot and deletes it immediately.
 
-### Lumo API key (recommended)
+Lumo does not currently offer users an API key to create or copy. Sign in at [lumo.proton.me](https://lumo.proton.me/) in Firefox, then start Pi. If Pi cannot find the session, refresh Lumo in Firefox and try again.
 
-Create a key in Lumo under **API docs → API keys**, then expose it to Pi:
-
-```bash
-export LUMO_API_KEY="your-key"
-pi
-```
-
-Lumo API keys currently require an eligible paid Lumo plan. Keep the key out of shell history, source files, and Git.
-
-### Existing lumode session variables
+### Manual session variables
 
 For compatibility with [lumode](https://github.com/rebehzat/lumode), the extension also recognizes its existing session credentials:
 
@@ -57,7 +47,7 @@ export LUMO_TOKEN="your-session-token"
 pi
 ```
 
-`LUMO_API_KEY` takes precedence when both authentication methods are present. Session-token authentication relies on Proton's private web session behavior and may break; prefer an API key when available.
+Manual session variables take precedence over automatic Firefox discovery. Session authentication relies on Proton's private web behavior and may break when Proton changes it.
 
 ### Firefox profile override
 
@@ -87,7 +77,7 @@ pi --models "lumo/*"
 Verify that Pi loaded all choices:
 
 ```bash
-LUMO_API_KEY=test pi -e . --list-models lumo --offline
+pi --list-models lumo
 ```
 
 ## Development
@@ -102,7 +92,8 @@ The provider uses Lumo's OpenAI-compatible endpoint at `https://lumo.proton.me/a
 
 ## Notes
 
-- Proton's public API documentation currently lists Lite and Max. Apertus 1.5 is included because it is a current selectable Lumo model; availability through an API key may depend on Proton's rollout and your account.
+- This extension uses Lumo's private web API and your existing browser session. Proton may change either without notice.
+- Apertus 1.5 availability may depend on Proton's rollout and your account.
 - Usage limits and plan restrictions are enforced by Proton.
 - This is an unofficial community extension and is not affiliated with Proton AG.
 
