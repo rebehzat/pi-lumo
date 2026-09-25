@@ -1,5 +1,34 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { discoverChromeCredentials } from "./chrome-auth.ts";
+import { discoverChromiumCredentials } from "./chromium-auth.ts";
 import { discoverFirefoxCredentials } from "./firefox-auth.ts";
+import { discoverSafariCredentials } from "./safari-auth.ts";
+
+interface BrowserCredentials {
+  uid: string;
+  token: string;
+  profile: string;
+}
+
+/** Tries each supported browser in turn; the first live Lumo session wins. */
+export function discoverBrowserCredentials(
+  discoverers: Array<() => BrowserCredentials | undefined> = [
+    discoverFirefoxCredentials,
+    discoverChromeCredentials,
+    discoverChromiumCredentials,
+    discoverSafariCredentials,
+  ],
+): BrowserCredentials | undefined {
+  for (const discover of discoverers) {
+    try {
+      const credentials = discover();
+      if (credentials) return credentials;
+    } catch {
+      // An unsupported or inaccessible browser should not prevent Pi startup.
+    }
+  }
+  return undefined;
+}
 
 export const PROVIDER_ID = "lumo";
 export const BASE_URL = "https://lumo.proton.me/api/ai/v1";
@@ -52,7 +81,7 @@ export const LUMO_MODELS = [
 
 export function getAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
-  discover: typeof discoverFirefoxCredentials = discoverFirefoxCredentials,
+  discover: () => BrowserCredentials | undefined = discoverBrowserCredentials,
 ): {
   apiKey: string;
   headers?: Record<string, string>;
