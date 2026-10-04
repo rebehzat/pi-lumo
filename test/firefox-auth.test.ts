@@ -17,7 +17,7 @@ test("searches standard, XDG, Snap, and Flatpak Firefox locations", () => {
 test("searches the macOS Application Support directory on darwin", () => {
   const roots = firefoxProfileRoots("/Users/tester", undefined, "darwin");
 
-  assert.deepEqual(roots, ["/Users/tester/Library/Application Support/Firefox/Profiles"]);
+  assert.deepEqual(roots, [join("/Users/tester", "Library", "Application Support", "Firefox", "Profiles")]);
 });
 
 test("includes Windows APPDATA Firefox roots when APPDATA is set", () => {
@@ -26,8 +26,8 @@ test("includes Windows APPDATA Firefox roots when APPDATA is set", () => {
   try {
     const roots = firefoxProfileRoots("C:\\Users\\tester", undefined, "win32");
 
-    assert.ok(roots.includes("C:\\Users\\tester\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles"));
-    assert.ok(roots.includes("C:\\Users\\tester\\AppData\\Roaming\\LibreWolf\\Profiles"));
+    assert.ok(roots.includes(join("C:\\Users\\tester\\AppData\\Roaming", "Mozilla", "Firefox", "Profiles")));
+    assert.ok(roots.includes(join("C:\\Users\\tester\\AppData\\Roaming", "LibreWolf", "Profiles")));
   } finally {
     if (saved === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = saved;
@@ -51,7 +51,7 @@ test("honors LUMO_FIREFOX_PROFILE on darwin too", () => {
   try {
     assert.deepEqual(firefoxProfileRoots("/Users/tester", undefined, "darwin"), [
       "/custom/profile",
-      "/Users/tester/Library/Application Support/Firefox/Profiles",
+      join("/Users/tester", "Library", "Application Support", "Firefox", "Profiles"),
     ]);
   } finally {
     if (previous === undefined) delete process.env.LUMO_FIREFOX_PROFILE;
