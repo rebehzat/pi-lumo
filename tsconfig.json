@@ -9,5 +9,15 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["index.ts", "firefox-auth.ts", "test/**/*.ts"]
+  "include": [
+    "index.ts",
+    "firefox-auth.ts",
+    "chrome-auth.ts",
+    "chromium-auth.ts",
+    "chromium-cookies.ts",
+    "safari-auth.ts",
+    "sqlite-cookies.ts",
+    "lumo-domain.ts",
+    "test/**/*.ts"
+  ]
 }

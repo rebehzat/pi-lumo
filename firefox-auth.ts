@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readdirSync } from "node:fs";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { querySqliteRows } from "./sqlite-cookies.ts";
 
 export interface FirefoxCredentials {
   uid: string;
@@ -17,15 +17,29 @@ interface CookieRow {
 export function firefoxProfileRoots(
   home = homedir(),
   xdgConfigHome = process.env.XDG_CONFIG_HOME,
-  appData = process.env.APPDATA,
+  currentPlatform: NodeJS.Platform = platform(),
 ): string[] {
+  if (currentPlatform === "win32") {
+    // Windows Firefox (including Dev Edition) and LibreWolf keep their
+    // profiles under %APPDATA%\<Vendor>\Profiles.
+    const appData = process.env.APPDATA;
+    return [
+      process.env.LUMO_FIREFOX_PROFILE,
+      appData ? join(appData, "Mozilla", "Firefox", "Profiles") : undefined,
+      appData ? join(appData, "LibreWolf", "Profiles") : undefined,
+    ].filter((path): path is string => Boolean(path));
+  }
+
+  if (currentPlatform === "darwin") {
+    return [
+      process.env.LUMO_FIREFOX_PROFILE,
+      join(home, "Library", "Application Support", "Firefox", "Profiles"),
+    ].filter((path): path is string => Boolean(path));
+  }
+
   const configHome = xdgConfigHome || join(home, ".config");
   return [
     process.env.LUMO_FIREFOX_PROFILE,
-    // Windows: regular Firefox, Firefox Dev Edition, and LibreWolf all keep
-    // their profiles under %APPDATA%\<Vendor>\Profiles.
-    appData ? join(appData, "Mozilla", "Firefox", "Profiles") : undefined,
-    appData ? join(appData, "LibreWolf", "Profiles") : undefined,
     join(home, ".mozilla", "firefox"),
     join(configHome, "mozilla", "firefox"),
     join(home, "snap", "firefox", "common", ".mozilla", "firefox"),
@@ -69,31 +83,7 @@ const COOKIE_QUERY = `SELECT name, value
                        ORDER BY expiry DESC`;
 
 function readCookieRows(databasePath: string): CookieRow[] {
-  const query = (path: string): CookieRow[] => {
-    const output = execFileSync("sqlite3", ["-json", path, COOKIE_QUERY], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 5_000,
-    });
-    return output.trim() ? (JSON.parse(output) as CookieRow[]) : [];
-  };
-
-  try {
-    return query(`file:${databasePath}?immutable=1`);
-  } catch {
-    const snapshotDirectory = mkdtempSync(join(tmpdir(), "pi-lumo-firefox-"));
-    chmodSync(snapshotDirectory, 0o700);
-    const snapshotPath = join(snapshotDirectory, "cookies.sqlite");
-    try {
-      copyFileSync(databasePath, snapshotPath);
-      const walPath = `${databasePath}-wal`;
-      if (existsSync(walPath)) copyFileSync(walPath, `${snapshotPath}-wal`);
-      chmodSync(snapshotPath, 0o600);
-      return query(snapshotPath);
-    } finally {
-      rmSync(snapshotDirectory, { recursive: true, force: true });
-    }
-  }
+  return querySqliteRows<CookieRow>(databasePath, COOKIE_QUERY, "pi-lumo-firefox-");
 }
 
 export function discoverFirefoxCredentials(

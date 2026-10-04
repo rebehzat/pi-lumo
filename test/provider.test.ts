@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import lumoProvider, { BASE_URL, getAuthConfig, LUMO_MODELS, PROVIDER_ID } from "../index.js";
+import lumoProvider, {
+  BASE_URL,
+  discoverBrowserCredentials,
+  getAuthConfig,
+  LUMO_MODELS,
+  PROVIDER_ID,
+} from "../index.js";
 
 test("exports all three current Lumo choices", () => {
   assert.deepEqual(
@@ -69,14 +75,50 @@ test("supports the session-token environment used by lumode", () => {
   );
 });
 
-test("uses discovered Firefox credentials only when environment credentials are absent", () => {
-  const discover = () => ({ uid: "firefox-uid", token: "firefox-token", profile: "/profile/cookies.sqlite" });
+test("uses discovered browser credentials only when environment credentials are absent", () => {
+  const discover = () => ({ uid: "browser-uid", token: "browser-token", profile: "/profile/cookies.sqlite" });
 
   assert.deepEqual(getAuthConfig({}, discover), {
-    apiKey: "firefox-token",
-    headers: { "x-pm-uid": "firefox-uid" },
+    apiKey: "browser-token",
+    headers: { "x-pm-uid": "browser-uid" },
   });
   assert.deepEqual(getAuthConfig({ LUMO_API_KEY: "official" }, discover), {
     apiKey: "$LUMO_API_KEY",
   });
+});
+
+test("discoverBrowserCredentials tries each browser in order until one succeeds", () => {
+  const calls: string[] = [];
+  const credentials = discoverBrowserCredentials([
+    () => {
+      calls.push("firefox");
+      return undefined;
+    },
+    () => {
+      calls.push("chrome");
+      return { uid: "chrome-uid", token: "chrome-token", profile: "/profile/Cookies" };
+    },
+    () => {
+      calls.push("safari");
+      return { uid: "safari-uid", token: "safari-token", profile: "/profile/Cookies.binarycookies" };
+    },
+  ]);
+
+  assert.deepEqual(calls, ["firefox", "chrome"]);
+  assert.deepEqual(credentials, { uid: "chrome-uid", token: "chrome-token", profile: "/profile/Cookies" });
+});
+
+test("discoverBrowserCredentials survives a browser discoverer that throws", () => {
+  const credentials = discoverBrowserCredentials([
+    () => {
+      throw new Error("locked profile");
+    },
+    () => ({ uid: "safari-uid", token: "safari-token", profile: "/profile/Cookies.binarycookies" }),
+  ]);
+
+  assert.deepEqual(credentials, { uid: "safari-uid", token: "safari-token", profile: "/profile/Cookies.binarycookies" });
+});
+
+test("discoverBrowserCredentials() wires up Firefox, Chrome, Chromium, and Safari by default without throwing", () => {
+  assert.doesNotThrow(() => discoverBrowserCredentials());
 });
