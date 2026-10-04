@@ -26,6 +26,18 @@ export function querySqliteRows<T>(databasePath: string, query: string, snapshot
     return output.trim() ? (JSON.parse(output) as T[]) : [];
   };
 
+  /**
+   * Quotes an argument for a SQLite CLI dot-command (e.g. `.backup`).
+   * Dot-command arguments are not SQL strings, so SQL escaping (doubling
+   * apostrophes) is wrong there: a path like `C:\Users\O'Brien\...` would
+   * split into two arguments. Instead, the CLI parses double-quoted
+   * arguments with backslash escapes, so backslashes and double quotes
+   * are escaped with a backslash per the dot-command argument rules
+   * (https://www.sqlite.org/cli.html#dot_command_arguments).
+   */
+  const quoteDotArgument = (argument: string): string =>
+    `"${argument.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+
   const runQuery = (target: string, extra: string[] = []): T[] =>
     run(["-json", ...extra, target, query]);
 
@@ -41,7 +53,7 @@ export function querySqliteRows<T>(databasePath: string, query: string, snapshot
       // .backup uses SQLite's backup API under the hood, producing a
       // consistent snapshot atomically (main file + WAL together) rather
       // than copying them as separate, potentially mismatched generations.
-      execFileSync("sqlite3", [databasePath, `.backup '${snapshotPath.replaceAll("'", "''")}'`], {
+      execFileSync("sqlite3", [databasePath, `.backup ${quoteDotArgument(snapshotPath)}`], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
         timeout: 15_000,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, execSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -168,6 +168,43 @@ test("querySqliteRows handles empty results gracefully", () => {
       TEST_PREFIX,
     );
     assert.deepEqual(result, [], "empty query should return empty array");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("fallback snapshot quotes paths with spaces and apostrophes", () => {
+  // The database directory contains '#', which terminates the file: URI
+  // (fragment marker) and makes the mode=ro primary read fail, forcing
+  // the .backup fallback. The snapshot prefix carries a space and an
+  // apostrophe, so the snapshot directory the fallback creates (via
+  // mkdtempSync) exercises the dot-command argument quoting that is the
+  // subject of this regression test.
+  const tempDir = mkdtempSync(join(tmpdir(), TEST_PREFIX));
+  const dbDirectory = join(tempDir, "profile #default");
+  mkdirSync(dbDirectory);
+  const dbPath = join(dbDirectory, "cookies.sqlite");
+  execSync(
+    `sqlite3 "${dbPath}" "CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT); INSERT INTO moz_cookies VALUES ('AUTH-esc', 'escaped-token', 'lumo.proton.me');"`,
+    { encoding: "utf8" },
+  );
+
+  // The prefix makes the fallback's snapshot directory inherit both a
+  // space and an apostrophe (mkdtempSync appends random characters).
+  const snapshotPrefix = `${TEST_PREFIX}O'Brien's `;
+
+  try {
+    const rows = querySqliteRows<{ name: string; value: string }>(
+      dbPath,
+      "SELECT name, value FROM moz_cookies WHERE name='AUTH-esc'",
+      snapshotPrefix,
+    );
+    assert.equal(rows.length, 1, "fallback should succeed with space/apostrophe in snapshot path");
+    assert.equal(rows[0].value, "escaped-token", "fallback should return the queried row");
+
+    // The fallback must clean up its temporary snapshot directory.
+    const leftovers = readdirSync(tmpdir()).filter((entry) => entry.startsWith(snapshotPrefix));
+    assert.deepEqual(leftovers, [], "snapshot directory should be removed after the fallback");
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
