@@ -17,10 +17,15 @@ interface CookieRow {
 export function firefoxProfileRoots(
   home = homedir(),
   xdgConfigHome = process.env.XDG_CONFIG_HOME,
+  appData = process.env.APPDATA,
 ): string[] {
   const configHome = xdgConfigHome || join(home, ".config");
   return [
     process.env.LUMO_FIREFOX_PROFILE,
+    // Windows: regular Firefox, Firefox Dev Edition, and LibreWolf all keep
+    // their profiles under %APPDATA%\<Vendor>\Profiles.
+    appData ? join(appData, "Mozilla", "Firefox", "Profiles") : undefined,
+    appData ? join(appData, "LibreWolf", "Profiles") : undefined,
     join(home, ".mozilla", "firefox"),
     join(configHome, "mozilla", "firefox"),
     join(home, "snap", "firefox", "common", ".mozilla", "firefox"),
@@ -81,6 +86,8 @@ function readCookieRows(databasePath: string): CookieRow[] {
     const snapshotPath = join(snapshotDirectory, "cookies.sqlite");
     try {
       copyFileSync(databasePath, snapshotPath);
+      const walPath = `${databasePath}-wal`;
+      if (existsSync(walPath)) copyFileSync(walPath, `${snapshotPath}-wal`);
       chmodSync(snapshotPath, 0o600);
       return query(snapshotPath);
     } finally {
