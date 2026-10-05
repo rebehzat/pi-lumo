@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import test from "node:test";
 
 import { chromeProfileRoots } from "../chrome-auth.js";
 
 test("uses the macOS Application Support directory on darwin", () => {
   const roots = chromeProfileRoots("/Users/tester", undefined, "darwin");
-  assert.deepEqual(roots, ["/Users/tester/Library/Application Support/Google/Chrome"]);
+  assert.deepEqual(roots, [join("/Users/tester", "Library", "Application Support", "Google", "Chrome")]);
 });
 
 test("searches XDG and Flatpak Chrome locations on Linux", () => {
   const roots = chromeProfileRoots("/home/tester", "/custom/config", "linux");
-  assert.ok(roots.includes("/custom/config/google-chrome"));
-  assert.ok(roots.includes("/home/tester/.var/app/com.google.Chrome/config/google-chrome"));
+  assert.ok(roots.includes(join("/custom/config", "google-chrome")));
+  assert.ok(roots.includes(join("/home/tester", ".var", "app", "com.google.Chrome", "config", "google-chrome")));
 });
 
 test("honors LUMO_CHROME_PROFILE as an additional root", () => {

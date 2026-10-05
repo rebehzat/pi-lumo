@@ -19,6 +19,17 @@ export function firefoxProfileRoots(
   xdgConfigHome = process.env.XDG_CONFIG_HOME,
   currentPlatform: NodeJS.Platform = platform(),
 ): string[] {
+  if (currentPlatform === "win32") {
+    // Windows Firefox (including Dev Edition) and LibreWolf keep their
+    // profiles under %APPDATA%\<Vendor>\Profiles.
+    const appData = process.env.APPDATA;
+    return [
+      process.env.LUMO_FIREFOX_PROFILE,
+      appData ? join(appData, "Mozilla", "Firefox", "Profiles") : undefined,
+      appData ? join(appData, "LibreWolf", "Profiles") : undefined,
+    ].filter((path): path is string => Boolean(path));
+  }
+
   if (currentPlatform === "darwin") {
     return [
       process.env.LUMO_FIREFOX_PROFILE,
