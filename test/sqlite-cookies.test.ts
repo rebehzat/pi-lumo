@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +21,7 @@ function openWalWriter(dbPath: string): {
   write: (sql: string) => Promise<void>;
   close: () => Promise<void>;
 } {
-  execSync(`sqlite3 "${dbPath}" "PRAGMA journal_mode=WAL; CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT);"`);
+  execFileSync("sqlite3", [dbPath, "PRAGMA journal_mode=WAL; CREATE TABLE moz_cookies (name TEXT, value TEXT, host);"]);
   const child = spawn("sqlite3", [dbPath], { stdio: ["pipe", "pipe", "ignore"] });
   let ackCounter = 0;
   let pendingAck: (() => void) | undefined;
@@ -75,8 +75,9 @@ test("WAL-only insert is visible through mode=ro but not immutable", async () =>
 
     // immutable=1 must miss the WAL-only row — this documents the hazard
     // that motivated switching the primary read to mode=ro.
-    const immutableOutput = execSync(
-      `sqlite3 -json "file:${dbPath}?immutable=1" "SELECT value FROM moz_cookies WHERE name='AUTH-test1'"`,
+    const immutableOutput = execFileSync(
+      "sqlite3",
+      ["-json", `file:${dbPath}?immutable=1`, "SELECT value FROM moz_cookies WHERE name='AUTH-test1'"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     );
     const immutableResult = immutableOutput.trim() ? JSON.parse(immutableOutput) : [];
@@ -134,10 +135,13 @@ test(".backup snapshot captures WAL changes consistently", async () => {
     // Take a backup while the writer is open — all three WAL-resident
     // transactions must appear together in one coherent snapshot.
     const snapshotPath = join(tempDir, "snapshot.sqlite");
-    execSync(`sqlite3 "${dbPath}" ".backup '${snapshotPath}'"`, { encoding: "utf8" });
+    const quoteDotArgument = (argument: string): string =>
+      `"${argument.replaceAll("\\", "\\\\").replaceAll('"', '\\\"')}"`;
+    execFileSync("sqlite3", [dbPath, `.backup ${quoteDotArgument(snapshotPath)}`]);
 
-    const snapshotOutput = execSync(
-      `sqlite3 -json "${snapshotPath}" "SELECT name, value FROM moz_cookies WHERE name LIKE 'AUTH-multi%' ORDER BY name"`,
+    const snapshotOutput = execFileSync(
+      "sqlite3",
+      ["-json", snapshotPath, "SELECT name, value FROM moz_cookies WHERE name LIKE 'AUTH-multi%' ORDER BY name"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     );
     const rows = JSON.parse(snapshotOutput) as Array<{ name: string; value: string }>;
@@ -158,9 +162,7 @@ test("querySqliteRows handles empty results gracefully", () => {
   const dbPath = join(tempDir, "cookies.sqlite");
 
   try {
-    execSync(`sqlite3 "${dbPath}" "CREATE TABLE moz_cookies (name TEXT, value TEXT)"`, {
-      encoding: "utf8",
-    });
+    execFileSync("sqlite3", [dbPath, "CREATE TABLE moz_cookies (name TEXT, value TEXT)"]);
 
     const result = querySqliteRows<{ name: string; value: string }>(
       dbPath,
@@ -184,10 +186,10 @@ test("fallback snapshot quotes paths with spaces and apostrophes", () => {
   const dbDirectory = join(tempDir, "profile #default");
   mkdirSync(dbDirectory);
   const dbPath = join(dbDirectory, "cookies.sqlite");
-  execSync(
-    `sqlite3 "${dbPath}" "CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT); INSERT INTO moz_cookies VALUES ('AUTH-esc', 'escaped-token', 'lumo.proton.me');"`,
-    { encoding: "utf8" },
-  );
+  execFileSync("sqlite3", [
+    dbPath,
+    "CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT); INSERT INTO moz_cookies VALUES ('AUTH-esc', 'escaped-token', 'lumo.proton.me');",
+  ]);
 
   // The prefix makes the fallback's snapshot directory inherit both a
   // space and an apostrophe (mkdtempSync appends random characters).
@@ -207,5 +209,72 @@ test("fallback snapshot quotes paths with spaces and apostrophes", () => {
     assert.deepEqual(leftovers, [], "snapshot directory should be removed after the fallback");
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("regression: full suite with apostrophe in temp path", () => {
+  // Create a temp base directory with both space and apostrophe.
+  const baseTemp = mkdtempSync(join(tmpdir(), TEST_PREFIX));
+  const apostropheTemp = join(baseTemp, "temp O'Brien");
+  mkdirSync(apostropheTemp);
+
+  const originalTmpdir = process.env.TMPDIR;
+  const originalTemp = process.env.TEMP;
+  const originalTmp = process.env.TMP;
+
+  try {
+    // Set environment to the apostrophe-containing directory.
+    process.env.TMPDIR = apostropheTemp;
+    if (process.platform === "win32") {
+      process.env.TEMP = apostropheTemp;
+      process.env.TMP = apostropheTemp;
+    }
+
+    // Test 1: .backup snapshot helper (forces fallback via '#' in path).
+    const tempWithHash = mkdtempSync(join(apostropheTemp, "profile #fallback"));
+    const dbWithPath = join(tempWithHash, "cookies.sqlite");
+    execFileSync("sqlite3", [
+      dbWithPath,
+      "CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT); INSERT INTO moz_cookies VALUES ('AUTH-apostrophe', 'apostrophe-token', 'lumo.proton.me');",
+    ]);
+
+    const rowsFromBackup = querySqliteRows<{ name: string; value: string }>(
+      dbWithPath,
+      "SELECT name, value FROM moz_cookies WHERE name='AUTH-apostrophe'",
+      TEST_PREFIX,
+    );
+    assert.equal(rowsFromBackup.length, 1, "backup fallback should succeed with apostrophe in temp path");
+    assert.equal(rowsFromBackup[0].value, "apostrophe-token");
+
+    // Test 2: Force the fallback path explicitly via '#' in the database directory.
+    const tempWithHashForTest2 = mkdtempSync(join(apostropheTemp, "profile #force"));
+    const dbForFallbackTest = join(tempWithHashForTest2, "cookies2.sqlite");
+    execFileSync("sqlite3", [
+      dbForFallbackTest,
+      "CREATE TABLE moz_cookies (name TEXT, value TEXT, host TEXT); INSERT INTO moz_cookies VALUES ('AUTH-force-fallback', 'fallback-success', 'test.me');",
+    ]);
+
+    // The '#' in the directory path will break the file: URI, forcing fallback.
+    const forcedFallbackResult = querySqliteRows<{ name: string; value: string }>(
+      dbForFallbackTest,
+      "SELECT name, value FROM moz_cookies WHERE name='AUTH-force-fallback'",
+      TEST_PREFIX,
+    );
+    assert.equal(forcedFallbackResult.length, 1, "explicit fallback should succeed with apostrophe in temp path");
+    assert.equal(forcedFallbackResult[0].value, "fallback-success");
+
+    // Cleanup verification.
+    const leftoversAfterBackup = readdirSync(tmpdir()).filter((entry) => entry.startsWith(TEST_PREFIX));
+    assert.deepEqual(leftoversAfterBackup, [], "temporary snapshot directories should be cleaned up");
+  } finally {
+    // Restore original environment.
+    if (originalTmpdir !== undefined) process.env.TMPDIR = originalTmpdir;
+    else delete process.env.TMPDIR;
+    if (originalTemp !== undefined) process.env.TEMP = originalTemp;
+    else delete process.env.TEMP;
+    if (originalTmp !== undefined) process.env.TMP = originalTmp;
+    else delete process.env.TMP;
+
+    rmSync(baseTemp, { recursive: true, force: true });
   }
 });
