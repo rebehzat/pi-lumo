@@ -79,24 +79,23 @@ export const LUMO_MODELS = [
   },
 ] as const;
 
+/**
+ * Without an `x-pm-uid` header Lumo ignores the token and treats the request
+ * as an anonymous guest. So every token source is paired with a UID. When the UID has to come
+ * from `LUMO_UID` and it is unset, Pi refuses to send the request and names the
+ * missing variable, instead of letting Lumo answer with an opaque 403.
+ */
+const UID_FROM_ENV = { "x-pm-uid": "$LUMO_UID" } as const;
+
 export function getAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   discover: () => BrowserCredentials | undefined = discoverBrowserCredentials,
 ): {
   apiKey: string;
-  headers?: Record<string, string>;
+  headers: Record<string, string>;
 } {
   if (!env.LUMO_API_KEY && env.LUMO_TOKEN) {
-    return {
-      apiKey: "$LUMO_TOKEN",
-      ...(env.LUMO_UID
-        ? {
-            headers: {
-              "x-pm-uid": "$LUMO_UID",
-            },
-          }
-        : {}),
-    };
+    return { apiKey: "$LUMO_TOKEN", headers: { ...UID_FROM_ENV } };
   }
 
   if (!env.LUMO_API_KEY) {
@@ -111,7 +110,9 @@ export function getAuthConfig(
     }
   }
 
-  return { apiKey: "$LUMO_API_KEY" };
+  // LUMO_API_KEY, or a key saved with Pi's /login (which Pi prefers over
+  // apiKey): either way Lumo still needs the UID.
+  return { apiKey: "$LUMO_API_KEY", headers: { ...UID_FROM_ENV } };
 }
 
 export default function lumoProvider(pi: ExtensionAPI): void {
@@ -129,4 +130,17 @@ export default function lumoProvider(pi: ExtensionAPI): void {
       input: [...model.input],
     })),
   });
+
+  // Lumo rejects chat requests whose body has no `lumo.client_type` with
+  // 403 blocked_by_policy, signed in or not; `client_type: "api"` is rejected
+  // the same way for session tokens.
+  pi.on("before_provider_request", (event, ctx) => {
+    if (ctx.model?.provider !== PROVIDER_ID) return undefined;
+    const payload = event.payload as Record<string, unknown> | null;
+    if (!payload || typeof payload !== "object") return undefined;
+    const lumo = (payload.lumo as Record<string, unknown> | undefined) ?? {};
+    return { ...payload, lumo: { client_type: LUMO_CLIENT_TYPE, ...lumo } };
+  });
 }
+
+export const LUMO_CLIENT_TYPE = process.env.LUMO_CLIENT_TYPE || "lumo_desktop";
