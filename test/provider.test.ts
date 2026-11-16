@@ -23,10 +23,14 @@ test("exports all three current Lumo choices", () => {
 test("registers an OpenAI-compatible provider using LUMO_API_KEY", () => {
   let registeredName: string | undefined;
   let registeredConfig: Record<string, unknown> | undefined;
+  let requestHandler: ((event: { payload: unknown }, ctx: { model?: { provider: string } }) => unknown) | undefined;
   const pi = {
     registerProvider(name: string, config: Record<string, unknown>) {
       registeredName = name;
       registeredConfig = config;
+    },
+    on(event: string, handler: typeof requestHandler) {
+      if (event === "before_provider_request") requestHandler = handler;
     },
   };
 
@@ -46,6 +50,14 @@ test("registers an OpenAI-compatible provider using LUMO_API_KEY", () => {
   assert.equal(registeredConfig?.authHeader, true);
   assert.equal(registeredConfig?.api, "openai-completions");
   assert.equal((registeredConfig?.models as unknown[]).length, 3);
+
+  // Lumo answers 403 blocked_by_policy unless the body names a client type.
+  const body = { model: "lumo-lite", messages: [] };
+  assert.deepEqual(requestHandler?.({ payload: body }, { model: { provider: PROVIDER_ID } }), {
+    ...body,
+    lumo: { client_type: "lumo_desktop" },
+  });
+  assert.equal(requestHandler?.({ payload: body }, { model: { provider: "openai" } }), undefined);
 });
 
 test("maps Pi thinking levels to Lumo reasoning efforts", () => {

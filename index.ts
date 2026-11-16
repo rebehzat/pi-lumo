@@ -80,9 +80,8 @@ export const LUMO_MODELS = [
 ] as const;
 
 /**
- * Lumo rejects any chat request that lacks an `x-pm-uid` header with
- * `403 {"type":"policy_rejection","code":"blocked_by_policy"}`, whatever the
- * token. So every token source is paired with a UID. When the UID has to come
+ * Without an `x-pm-uid` header Lumo ignores the token and treats the request
+ * as an anonymous guest. So every token source is paired with a UID. When the UID has to come
  * from `LUMO_UID` and it is unset, Pi refuses to send the request and names the
  * missing variable, instead of letting Lumo answer with an opaque 403.
  */
@@ -131,4 +130,17 @@ export default function lumoProvider(pi: ExtensionAPI): void {
       input: [...model.input],
     })),
   });
+
+  // Lumo rejects chat requests whose body has no `lumo.client_type` with
+  // 403 blocked_by_policy, signed in or not; `client_type: "api"` is rejected
+  // the same way for session tokens.
+  pi.on("before_provider_request", (event, ctx) => {
+    if (ctx.model?.provider !== PROVIDER_ID) return undefined;
+    const payload = event.payload as Record<string, unknown> | null;
+    if (!payload || typeof payload !== "object") return undefined;
+    const lumo = (payload.lumo as Record<string, unknown> | undefined) ?? {};
+    return { ...payload, lumo: { client_type: LUMO_CLIENT_TYPE, ...lumo } };
+  });
 }
+
+export const LUMO_CLIENT_TYPE = process.env.LUMO_CLIENT_TYPE || "lumo_desktop";
