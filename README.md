@@ -79,6 +79,7 @@ pi
 | --- | --- | --- |
 | Models are listed, but requests fail with `401 "Invalid access token"` | The `eyJ…` AUTH cookie was used, or the session token expired | Use the opaque AUTH cookie; refresh Lumo in the browser and re-copy |
 | `No models available` | No resolvable credentials: variables unset and no live browser session found | Export `LUMO_UID` and `LUMO_TOKEN`, or sign in to Lumo in a supported browser |
+| `403 {"message":"Request rejected by policy.","type":"policy_rejection","code":"blocked_by_policy"}` (older pi-lumo) or `Failed to resolve provider "lumo" header "x-pm-uid" from environment variable: LUMO_UID` | A token was supplied without its UID: `LUMO_TOKEN` without `LUMO_UID`, a `LUMO_API_KEY`, or a token saved with Pi's `/login`. Lumo rejects every request that has no `x-pm-uid` header with this 403, whatever the token | Also export `LUMO_UID` (the part after `AUTH-` in the cookie name) |
 | Models work in one shell, then vanish in another | The exports were typed into a shell but never persisted | Add the exports to `~/.zshrc`, `~/.bashrc`, or your shell's equivalent |
 
 ### macOS notes

@@ -42,6 +42,7 @@ test("registers an OpenAI-compatible provider using LUMO_API_KEY", () => {
   assert.equal(registeredName, PROVIDER_ID);
   assert.equal(registeredConfig?.baseUrl, BASE_URL);
   assert.equal(registeredConfig?.apiKey, "$LUMO_API_KEY");
+  assert.deepEqual(registeredConfig?.headers, { "x-pm-uid": "$LUMO_UID" });
   assert.equal(registeredConfig?.authHeader, true);
   assert.equal(registeredConfig?.api, "openai-completions");
   assert.equal((registeredConfig?.models as unknown[]).length, 3);
@@ -71,8 +72,29 @@ test("supports the session-token environment used by lumode", () => {
   });
   assert.deepEqual(
     getAuthConfig({ LUMO_API_KEY: "official", LUMO_TOKEN: "legacy", LUMO_UID: "uid" }),
-    { apiKey: "$LUMO_API_KEY" },
+    { apiKey: "$LUMO_API_KEY", headers: { "x-pm-uid": "$LUMO_UID" } },
   );
+});
+
+// Lumo answers any request without x-pm-uid with 403 "blocked_by_policy" (issue #6).
+// Every token source must therefore carry a UID header; when it comes from LUMO_UID
+// and that is unset, Pi fails with "Failed to resolve ... from environment variable: LUMO_UID".
+test("always requires x-pm-uid, even when LUMO_UID is missing", () => {
+  const noBrowser = () => undefined;
+
+  assert.deepEqual(getAuthConfig({ LUMO_TOKEN: "secret" }, noBrowser), {
+    apiKey: "$LUMO_TOKEN",
+    headers: { "x-pm-uid": "$LUMO_UID" },
+  });
+  assert.deepEqual(getAuthConfig({ LUMO_API_KEY: "key" }, noBrowser), {
+    apiKey: "$LUMO_API_KEY",
+    headers: { "x-pm-uid": "$LUMO_UID" },
+  });
+  // Nothing configured: a key saved with Pi's /login takes over apiKey, so the UID header must still be present.
+  assert.deepEqual(getAuthConfig({}, noBrowser), {
+    apiKey: "$LUMO_API_KEY",
+    headers: { "x-pm-uid": "$LUMO_UID" },
+  });
 });
 
 test("uses discovered browser credentials only when environment credentials are absent", () => {
@@ -84,6 +106,7 @@ test("uses discovered browser credentials only when environment credentials are 
   });
   assert.deepEqual(getAuthConfig({ LUMO_API_KEY: "official" }, discover), {
     apiKey: "$LUMO_API_KEY",
+    headers: { "x-pm-uid": "$LUMO_UID" },
   });
 });
 

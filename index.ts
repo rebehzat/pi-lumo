@@ -79,24 +79,24 @@ export const LUMO_MODELS = [
   },
 ] as const;
 
+/**
+ * Lumo rejects any chat request that lacks an `x-pm-uid` header with
+ * `403 {"type":"policy_rejection","code":"blocked_by_policy"}`, whatever the
+ * token. So every token source is paired with a UID. When the UID has to come
+ * from `LUMO_UID` and it is unset, Pi refuses to send the request and names the
+ * missing variable, instead of letting Lumo answer with an opaque 403.
+ */
+const UID_FROM_ENV = { "x-pm-uid": "$LUMO_UID" } as const;
+
 export function getAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   discover: () => BrowserCredentials | undefined = discoverBrowserCredentials,
 ): {
   apiKey: string;
-  headers?: Record<string, string>;
+  headers: Record<string, string>;
 } {
   if (!env.LUMO_API_KEY && env.LUMO_TOKEN) {
-    return {
-      apiKey: "$LUMO_TOKEN",
-      ...(env.LUMO_UID
-        ? {
-            headers: {
-              "x-pm-uid": "$LUMO_UID",
-            },
-          }
-        : {}),
-    };
+    return { apiKey: "$LUMO_TOKEN", headers: { ...UID_FROM_ENV } };
   }
 
   if (!env.LUMO_API_KEY) {
@@ -111,7 +111,9 @@ export function getAuthConfig(
     }
   }
 
-  return { apiKey: "$LUMO_API_KEY" };
+  // LUMO_API_KEY, or a key saved with Pi's /login (which Pi prefers over
+  // apiKey): either way Lumo still needs the UID.
+  return { apiKey: "$LUMO_API_KEY", headers: { ...UID_FROM_ENV } };
 }
 
 export default function lumoProvider(pi: ExtensionAPI): void {
